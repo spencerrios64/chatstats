@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1d4ed8">
+<title>chatstats</title>
+<style>
+  :root { color-scheme: light dark; --bg:#fff; --fg:#1b1f24; --mut:#667085; --line:#d8dee4; --card:#f6f8fa; --acc:#1d4ed8; --warn:#b45309; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --fg:#e6edf3; --mut:#8b949e; --line:#30363d; --card:#161b22; --acc:#60a5fa; --warn:#fbbf24; } }
+  * { box-sizing: border-box; }
+  body { margin:0 auto; max-width:860px; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui, sans-serif; }
+  h1 { font-size:1.4rem; margin:0; }
+  h2 { font-size:1.05rem; margin:22px 0 6px; }
+  .mut { color:var(--mut); font-size:.875rem; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:12px 0; }
+  button, .btn, select, input, textarea { font:inherit; color:var(--fg); background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:8px 12px; min-height:42px; }
+  button, .btn { background:var(--card); cursor:pointer; display:inline-flex; align-items:center; }
+  button.main, .btn.main { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.small { min-height:32px; padding:2px 10px; font-size:.85rem; }
+  button:disabled { opacity:.45; cursor:default; }
+  input[type=checkbox] { min-height:0; width:18px; height:18px; padding:0; }
+  textarea { width:100%; resize:vertical; }
+  label.opt { display:flex; gap:8px; align-items:center; min-height:36px; }
+  table { width:100%; border-collapse:collapse; margin:8px 0; }
+  td, th { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+  .card { border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:8px 0; overflow-wrap:anywhere; }
+  .pre { white-space:pre-wrap; }
+  details { border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:8px 0; }
+  summary { cursor:pointer; }
+  li { margin:4px 0; }
+  a { color:var(--acc); }
+  .bar { display:grid; grid-template-columns:5.5em 1fr 3.5em; gap:8px; align-items:center; font-size:.875rem; margin:3px 0; }
+  .bar i { display:block; height:14px; border-radius:4px; background:var(--acc); min-width:2px; }
+  .bar span:last-child { text-align:right; font-variant-numeric:tabular-nums; }
+  .chips span { display:inline-block; border:1px solid var(--line); border-radius:999px; padding:2px 10px; margin:3px 4px 3px 0; font-size:.875rem; }
+  .wide { overflow-x:auto; }
+  td input { width:6em; min-height:34px; padding:4px 8px; }
+  .big { font-size:1.15rem; }
+</style>
+</head>
+<body>
+<h1>chatstats</h1>
+<p>See how much you use each AI: chats, messages, rough token counts, busiest months and the topics that keep coming up.
+<span class="mut">Everything happens in this browser. Nothing is uploaded.</span></p>
+
+<div class="row">
+  <label class="btn main">Pick your export files
+    <input id="file" type="file" accept=".zip,.json,application/zip,application/json" multiple hidden>
+  </label>
+  <button id="csv" disabled>Download numbers (.csv)</button>
+</div>
+<p class="mut" id="status" role="status">Pick the export files you downloaded from Claude, ChatGPT, Gemini, Grok or DeepSeek (.zip or .json). You can pick several at once.</p>
+
+<div id="work" hidden>
+  <p class="big" id="headline"></p>
+
+  <h2>By AI</h2>
+  <div class="wide"><table id="per">
+    <thead><tr><th>AI</th><th class="n">Chats</th><th class="n">Your messages</th><th class="n">AI replies</th><th class="n">Tokens you wrote</th><th class="n">Tokens AI wrote</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+
+  <h2>Chats per month</h2>
+  <div id="months"></div>
+
+  <h2>Words that come up in the most chats</h2>
+  <div id="words" class="chips"></div>
+
+  <h2>Your longest chats</h2>
+  <div class="wide"><table id="long">
+    <thead><tr><th>Chat</th><th>AI</th><th>Date</th><th class="n">Tokens</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+
+  <h2>What this would cost through the API</h2>
+  <p class="mut">Type each AI's price per million tokens (from its pricing page) to see roughly what the same chats would cost with API keys, for example in chatrelay. "Tokens sent" counts the whole chat so far for every reply, because an API re-reads the conversation each time.</p>
+  <div class="wide"><table id="cost">
+    <thead><tr><th>AI</th><th class="n">Tokens sent</th><th class="n">Tokens received</th><th>$ per 1M sent</th><th>$ per 1M received</th><th class="n">Rough cost</th></tr></thead>
+    <tbody></tbody>
+  </table></div>
+</div>
+
+<h2>How to read the numbers</h2>
+<ul class="mut">
+  <li>Token counts are estimates: about 4 characters per token. Real counts differ by AI and by language, often by 10 to 30 percent.</li>
+  <li>Only text is counted. Images, files, web searches and the AI's hidden thinking are not in the exports, so real usage is higher.</li>
+  <li>Gemini exports have no chats, only prompts per day, so each day counts as one chat.</li>
+</ul>
+<p class="mut">Part of the same family as <a href="https://github.com/spencerrios64/chatvault">chatvault</a>, <a href="https://spencerrios64.github.io/chatzip/">chatzip</a> and <a href="https://spencerrios64.github.io/chatrelay/">chatrelay</a>.</p>
+<script>
+// ---------------------------------------------------------------- core (no DOM)
+const iso = v => {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return new Date(v > 1e11 ? v : v * 1000).toISOString();
+  if (typeof v === 'object') {
+    const d = v.$date, n = d && typeof d === 'object' ? d.$numberLong : d;
+    return n == null ? null : iso(isNaN(+n) ? String(n) : +n);
+  }
+  return String(v);
+};
+
+function stripHtml(html) {
+  const ent = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+  return html.replace(/<br\s*\/?>|<\/(p|li|h\d|div|tr|pre)>/gi, '\n').replace(/<[^>]*>/g, '')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&(\w+);/g, (m, n) => ent[n] || m).replace(/\n{3,}/g, '\n\n').trim();
+}
+
+// ChatGPT and DeepSeek both export a "mapping" tree of messages.
+function parseMapping(data) {
+  let deepseek = false;
+  const convs = data.map(c => {
+    const map = c.mapping || {};
+    let chain = [], node = c.current_node;
+    if (node) {
+      while (node && map[node]) { chain.push(map[node]); node = map[node].parent; }
+      chain.reverse();
+    } else {
+      node = map.root ? 'root' : Object.keys(map).find(k => !map[k].parent);
+      const seen = new Set();
+      while (node && map[node] && !seen.has(node)) {
+        seen.add(node); chain.push(map[node]);
+        const kids = map[node].children || [];
+        node = kids[kids.length - 1];
+      }
+    }
+    const messages = [];
+    for (const e of chain) {
+      const m = e.message;
+      if (!m) continue;
+      if (Array.isArray(m.fragments)) {
+        deepseek = true;
+        for (const f of m.fragments) {
+          const role = f.type === 'REQUEST' ? 'user' : f.type === 'RESPONSE' ? 'assistant' : null;
+          const text = String(f.content || '').trim();
+          if (role && text) messages.push({ role, text });
+        }
+        continue;
+      }
+      const role = (m.author || {}).role;
+      if (role !== 'user' && role !== 'assistant') continue;
+      const text = ((m.content || {}).parts || []).filter(p => typeof p === 'string').join('\n').trim();
+      if (text) messages.push({ role, text });
+    }
+    return { title: c.title, date: iso(c.create_time || c.inserted_at || c.update_time || c.updated_at), messages };
+  });
+  return { ai: deepseek ? 'DeepSeek' : 'ChatGPT', convs };
+}
+
+function parseClaude(data) {
+  return { ai: 'Claude', convs: data.map(c => {
+    const messages = [];
+    for (const m of c.chat_messages || []) {
+      let text = (m.text || '').trim();
+      if (!text) text = (m.content || []).filter(b => b.type === 'text').map(b => b.text || '').join('\n').trim();
+      if (text) messages.push({ role: m.sender === 'human' ? 'user' : 'assistant', text });
+    }
+    return { title: c.name, date: iso(c.created_at), messages };
+  }) };
+}
+
+function parseGrok(data) {
+  return { ai: 'Grok', convs: data.conversations.map(c => {
+    const info = c.conversation || {}, messages = [];
+    for (const r of c.responses || []) {
+      const m = r.response || r, text = String(m.message || '').trim();
+      if (!text) continue;
+      const who = String(m.sender || '').toLowerCase();
+      messages.push({ role: who === 'human' || who === 'user' ? 'user' : 'assistant', text });
+    }
+    return { title: info.title, date: iso(info.create_time || info.created_at), messages };
+  }) };
+}
+
+// Google Takeout "My Activity" has one entry per prompt and no chat ids: group by day.
+function parseGemini(data) {
+  const days = new Map();
+  for (const it of data) {
+    if (!/gemini/i.test(it.header || '') || !it.title) continue;
+    const day = String(it.time || '').slice(0, 10) || 'undated';
+    const turn = [{ role: 'user', text: String(it.title).replace(/^Prompted\s+/, '').trim() }];
+    const reply = (it.safeHtmlItem || []).map(h => stripHtml(h.html || '')).join('\n').trim();
+    if (reply) turn.push({ role: 'assistant', text: reply });
+    if (!days.has(day)) days.set(day, []);
+    days.get(day).push({ time: String(it.time || ''), turn });
+  }
+  return { ai: 'Gemini', convs: [...days].map(([day, turns]) => ({
+    title: 'Gemini prompts', date: day === 'undated' ? null : day,
+    messages: turns.sort((a, b) => a.time.localeCompare(b.time)).flatMap(t => t.turn) })) };
+}
+
+// A chatvault archive: [{source, title, messages:[{role, text}]}]
+function parseArchive(data) {
+  const names = { claude: 'Claude', chatgpt: 'ChatGPT' }, by = new Map();
+  for (const c of data) {
+    const src = String(c.source || 'other'), ai = names[src] || src[0].toUpperCase() + src.slice(1);
+    if (!by.has(ai)) by.set(ai, []);
+    by.get(ai).push({ title: c.title, date: iso(c.created_at || c.updated_at),
+      messages: (c.messages || []).filter(m => (m.text || '').trim()).map(m => ({ role: m.role, text: m.text })) });
+  }
+  return [...by].map(([ai, convs]) => ({ ai, convs }));
+}
+
+// Returns [{ai, convs}] for one parsed JSON document, or [] when it isn't a chat export.
+function detect(doc) {
+  if (Array.isArray(doc) && doc.length && doc[0] && typeof doc[0] === 'object') {
+    const f = doc[0];
+    if ('mapping' in f) return [parseMapping(doc)];
+    if ('chat_messages' in f) return [parseClaude(doc)];
+    if ('header' in f && 'title' in f && 'time' in f) return [parseGemini(doc)].filter(g => g.convs.length);
+    if ('messages' in f && 'source' in f) return parseArchive(doc);
+  }
+  if (doc && Array.isArray(doc.conversations) && doc.conversations.some(c => c && c.responses)) return [parseGrok(doc)];
+  return [];
+}
+
+// Reads the chat files out of an export .zip (or a bare .json) without loading the whole zip.
+async function readExport(file) {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (!(head[0] === 0x50 && head[1] === 0x4b)) return [{ name: file.name, doc: JSON.parse(await file.text()) }];
+  const tail = new DataView(await file.slice(Math.max(0, file.size - 65558)).arrayBuffer());
+  let e = -1;
+  for (let i = tail.byteLength - 22; i >= 0; i--) if (tail.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('not a valid zip file');
+  const count = tail.getUint16(e + 10, true), cdSize = tail.getUint32(e + 12, true), cdOff = tail.getUint32(e + 16, true);
+  if (cdOff === 0xffffffff || count === 0xffff) throw new Error('zip is too large (zip64); unzip it and pick the .json files inside');
+  const cdBuf = await file.slice(cdOff, cdOff + cdSize).arrayBuffer();
+  const cd = new DataView(cdBuf), dec = new TextDecoder(), out = [];
+  for (let n = 0, p = 0; n < count && cd.getUint32(p, true) === 0x02014b50; n++) {
+    const method = cd.getUint16(p + 10, true), csize = cd.getUint32(p + 20, true);
+    const nlen = cd.getUint16(p + 28, true), xlen = cd.getUint16(p + 30, true), clen = cd.getUint16(p + 32, true);
+    const off = cd.getUint32(p + 42, true);
+    const name = dec.decode(new Uint8Array(cdBuf, p + 46, nlen));
+    p += 46 + nlen + xlen + clen;
+    const m = /(^|\/)(conversations[^\/]*|prod-grok-backend|MyActivity)\.json$/i.exec(name);
+    if (!m || (/^MyActivity$/i.test(m[2]) && !/gemini/i.test(name))) continue;
+    const lh = new DataView(await file.slice(off, off + 30).arrayBuffer());
+    const start = off + 30 + lh.getUint16(26, true) + lh.getUint16(28, true);
+    let stream = file.slice(start, start + csize).stream();
+    if (method === 8) stream = stream.pipeThrough(new DecompressionStream('deflate-raw'));
+    else if (method !== 0) throw new Error('unsupported zip compression');
+    out.push({ name, doc: JSON.parse(await new Response(stream).text()) });
+  }
+  return out;
+}
+
+
+// Reads every picked file and returns a flat list of chats.
+async function loadFiles(files, say) {
+  const chats = [], problems = [];
+  for (const file of files) {
+    say(`Reading ${file.name}…`);
+    try {
+      const found = (await readExport(file)).flatMap(d => detect(d.doc));
+      if (!found.length) problems.push(`${file.name}: no chats recognised`);
+      for (const g of found) for (const c of g.convs) if (c.messages.length)
+        chats.push({ ai: g.ai, title: String(c.title || 'Untitled'), date: (c.date || '').slice(0, 10), messages: c.messages });
+    } catch (err) { problems.push(`${file.name}: ${err.message}`); }
+  }
+  return { chats, problems };
+}
+
+const wordsOf = t => (t.toLowerCase().match(/\p{L}+/gu) || []).filter(w => w.length >= 4 && w.length <= 20);
+const tok = chars => Math.round(chars / 4);
+const STOP = new Set(('about above after again also always another anything around because been before being both cant could does doing dont down each else even ever every ' +
+  'first from give goes going good have here into just know like look made make many more most much must need never okay only other over please really right same should show ' +
+  'some something still such sure tell than thank thanks that their them then there these they thing things think this those through time using very want well were what when ' +
+  'where which while will with without work works would yeah your yours youre thats didnt doesnt isnt wont ive lets untitled chat help find used').split(' '));
+
+function stats(chats) {
+  const per = new Map(), months = new Map(), freq = new Map(), sizes = [];
+  for (const c of chats) {
+    if (!per.has(c.ai)) per.set(c.ai, { ai: c.ai, chats: 0, mine: 0, theirs: 0, myChars: 0, aiChars: 0, sentChars: 0 });
+    const s = per.get(c.ai), seen = new Set();
+    let run = 0;
+    s.chats++;
+    for (const w of wordsOf(c.title)) seen.add(w);
+    for (const m of c.messages) {
+      const n = m.text.length;
+      if (m.role === 'user') {
+        s.mine++; s.myChars += n;
+        for (const w of wordsOf(m.text.slice(0, 4000))) seen.add(w);
+      } else { s.theirs++; s.aiChars += n; s.sentChars += run; }  // an API reply re-reads everything before it
+      run += n;
+    }
+    for (const w of seen) if (!STOP.has(w)) freq.set(w, (freq.get(w) || 0) + 1);
+    const month = c.date ? c.date.slice(0, 7) : 'no date';
+    months.set(month, (months.get(month) || 0) + 1);
+    sizes.push({ title: c.title, ai: c.ai, date: c.date, tokens: tok(run) });
+  }
+  const dates = chats.map(c => c.date).filter(Boolean).sort();
+  return {
+    per: [...per.values()].sort((a, b) => b.chats - a.chats),
+    months: [...months].sort((a, b) => a[0].localeCompare(b[0])),
+    words: [...freq].filter(e => e[1] > 1).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 40),
+    longest: sizes.sort((a, b) => b.tokens - a.tokens).slice(0, 10),
+    first: dates[0] || '', last: dates[dates.length - 1] || '', chats: chats.length,
+  };
+}
+
+// prices: {ai: {in, out}} in dollars per million tokens.
+function cost(s, price) {
+  const p = price || {}, a = parseFloat(p.in), b = parseFloat(p.out);
+  if (!(a >= 0) && !(b >= 0)) return null;
+  return (tok(s.sentChars) * (a >= 0 ? a : 0) + tok(s.aiChars) * (b >= 0 ? b : 0)) / 1e6;
+}
+
+function toCsv(st) {
+  const rows = [['AI', 'Chats', 'Your messages', 'AI replies', 'Tokens you wrote (est.)', 'Tokens AI wrote (est.)', 'Tokens sent via API (est.)']];
+  for (const s of st.per) rows.push([s.ai, s.chats, s.mine, s.theirs, tok(s.myChars), tok(s.aiChars), tok(s.sentChars)]);
+  rows.push([], ['Month', 'Chats'], ...st.months);
+  return rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(',')).join('\r\n') + '\r\n';
+}
+
+if (typeof module !== 'undefined') module.exports = { detect, stats, cost, toCsv, tok };
+
+// ---------------------------------------------------------------- page
+if (typeof document !== 'undefined') {
+  const $ = id => document.getElementById(id);
+  const el = (tag, props, ...kids) => { const n = Object.assign(document.createElement(tag), props || {}); n.append(...kids); return n; };
+  const copy = async (text, btn) => {
+    const old = btn.textContent;
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied'; } catch (e) { btn.textContent = 'Copy failed'; }
+    setTimeout(() => { btn.textContent = old; }, 1500);
+  };
+  const download = (name, blob) => {
+    const a = el('a', { href: URL.createObjectURL(blob), download: name });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  };
+  const fmt = n => Math.round(n).toLocaleString('en-US');
+  const td = (text, cls) => el('td', { textContent: text, className: cls || '' });
+  let chats = [], st = null, prices = {};
+  try { prices = JSON.parse(localStorage.getItem('chatstats-prices') || '{}') || {}; } catch (e) {}
+
+  function renderCost() {
+    $('cost').tBodies[0].replaceChildren(...st.per.map(s => {
+      const p = prices[s.ai] || (prices[s.ai] = { in: '', out: '' });
+      const total = td('', 'n');
+      const show = () => { const c = cost(s, p); total.textContent = c == null ? '—' : '$' + c.toFixed(2); };
+      const box = (key, label) => {
+        const i = el('input', { type: 'number', min: '0', step: 'any', value: p[key], placeholder: '0.00' });
+        i.setAttribute('aria-label', `${s.ai}: ${label}`);
+        i.oninput = () => { p[key] = i.value; show(); try { localStorage.setItem('chatstats-prices', JSON.stringify(prices)); } catch (e) {} };
+        return el('td', {}, i);
+      };
+      show();
+      return el('tr', {}, td(s.ai), td(fmt(tok(s.sentChars)), 'n'), td(fmt(tok(s.aiChars)), 'n'), box('in', 'dollars per million tokens sent'), box('out', 'dollars per million tokens received'), total);
+    }));
+  }
+
+  function render() {
+    st = stats(chats);
+    $('work').hidden = !st.chats;
+    $('csv').disabled = !st.chats;
+    if (!st.chats) return;
+    const msgs = st.per.reduce((n, s) => n + s.mine, 0), top = st.per[0];
+    $('headline').textContent = `${fmt(st.chats)} chats and ${fmt(msgs)} messages from you` +
+      (st.first ? `, from ${st.first} to ${st.last}` : '') + (st.per.length > 1 ? `. You use ${top.ai} the most (${Math.round(100 * top.chats / st.chats)}% of chats).` : '.');
+    $('per').tBodies[0].replaceChildren(...st.per.map(s => el('tr', {}, td(s.ai), td(fmt(s.chats), 'n'), td(fmt(s.mine), 'n'), td(fmt(s.theirs), 'n'), td(fmt(tok(s.myChars)), 'n'), td(fmt(tok(s.aiChars)), 'n'))));
+    const max = Math.max(...st.months.map(m => m[1]));
+    $('months').replaceChildren(...st.months.map(([m, n]) => {
+      const bar = el('i'); bar.style.width = (100 * n / max) + '%';
+      return el('div', { className: 'bar' }, el('span', { textContent: m }), el('span', {}, bar), el('span', { textContent: fmt(n) }));
+    }));
+    $('words').replaceChildren(...(st.words.length ? st.words.map(([w, n]) => el('span', { textContent: `${w} ${n}` }))
+      : [el('p', { className: 'mut', textContent: 'No word appears in more than one chat yet.' })]));
+    $('long').tBodies[0].replaceChildren(...st.longest.map(c => el('tr', {}, td(c.title.slice(0, 80)), td(c.ai), td(c.date || '—'), td(fmt(c.tokens), 'n'))));
+    renderCost();
+  }
+
+  $('file').onchange = async ev => {
+    const r = await loadFiles(ev.target.files, t => { $('status').textContent = t; });
+    ev.target.value = '';
+    chats.push(...r.chats);
+    $('status').textContent = (chats.length ? `${fmt(chats.length)} chats loaded. Pick more files to add them.` : 'No chats found yet.') + (r.problems.length ? ' Problems: ' + r.problems.join('; ') : '');
+    render();
+  };
+  $('csv').onclick = () => download('chatstats.csv', new Blob([toCsv(st)], { type: 'text/csv' }));
+}
+</script>
+</body>
+</html>
