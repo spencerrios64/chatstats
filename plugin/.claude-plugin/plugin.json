@@ -1,0 +1,9 @@
+{
+  "name": "chatstats",
+  "version": "0.1.0",
+  "description": "See how much you use each AI: chats, messages, rough token counts, busiest months and common topics.",
+  "author": { "name": "spencerrios64" },
+  "homepage": "https://spencerrios64.github.io/chatstats/",
+  "repository": "https://github.com/spencerrios64/chatstats",
+  "keywords": ["statistics", "usage", "tokens", "chat history", "cost"]
+}
