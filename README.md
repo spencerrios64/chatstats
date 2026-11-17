@@ -33,4 +33,15 @@ saves the totals as a `.csv`.
   **DeepSeek** are read from their documented formats and have not been checked against real exports.
 - Exports over 4 GB (zip64) aren't supported: unzip them and pick the `.json` inside.
 
+## Claude plugin
+
+This repo is also a Claude plugin marketplace, so Claude can do the same job in a chat. In Claude Code:
+
+```
+/plugin marketplace add spencerrios64/chatstats
+/plugin install chatstats@chatstats
+```
+
+In the Claude app, download the `plugin` folder as a zip, rename it to `.plugin` and open it in a chat. Details: [plugin/README.md](plugin/README.md).
+
 Part of a family of small tools for AI chats: [chatvault](https://github.com/spencerrios64/chatvault), [chatzip](https://github.com/spencerrios64/chatzip), [chatrelay](https://github.com/spencerrios64/chatrelay), [chatbrief](https://github.com/spencerrios64/chatbrief), [chatscrub](https://github.com/spencerrios64/chatscrub), [chatcompare](https://github.com/spencerrios64/chatcompare), [chatstats](https://github.com/spencerrios64/chatstats) and [promptbank](https://github.com/spencerrios64/promptbank).
