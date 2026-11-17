@@ -1,0 +1,16 @@
+{
+  "name": "chatstats",
+  "owner": {
+    "name": "spencerrios64"
+  },
+  "metadata": {
+    "description": "See how much you use each AI: chats, messages, rough token counts, busiest months and common topics."
+  },
+  "plugins": [
+    {
+      "name": "chatstats",
+      "source": "./plugin",
+      "description": "See how much you use each AI: chats, messages, rough token counts, busiest months and common topics."
+    }
+  ]
+}
